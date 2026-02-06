@@ -1,10 +1,12 @@
 .env
-.env.*
-
-# macOS
-.DS_Store
-**/.DS_Store
-
+.env
 data/
+*.zip
 __pycache__/
-*.pyc
+.venv/
+
+.env
+data/
+*.zip
+__pycache__/
+.venv/
