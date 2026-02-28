@@ -1,0 +1,977 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Tactical Viewer</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg:        #1a1a1a;
+    --panel:     #222222;
+    --panel2:    #272727;
+    --border:    #333333;
+    --border2:   #3a3a3a;
+    --text:      #cccccc;
+    --text-dim:  #777777;
+    --text-mute: #555555;
+    --green:     #2d6a2d;
+    --green-line:#4caf50;
+    --orange:    #e07840;
+    --accent:    #e07840;
+    --sidebar-w: 280px;
+  }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    font-family: 'Times New Roman', Times, serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* ─── SIDEBAR ─────────────────────────────────────────── */
+  #sidebar {
+    position: fixed;
+    top: 0; left: 0;
+    width: var(--sidebar-w);
+    height: 100vh;
+    background: #1c1c1c;
+    border-right: 1px solid var(--border);
+    z-index: 1000;
+    transform: translateX(-100%);
+    transition: transform 0.3s ease-out;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  #sidebar.open { transform: translateX(0); }
+
+  .sidebar-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+  .sidebar-title {
+    font-size: 11px;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--text-dim);
+  }
+  #close-btn {
+    background: none;
+    border: 1px solid var(--border2);
+    color: var(--text);
+    width: 28px; height: 28px;
+    cursor: pointer;
+    font-family: 'Times New Roman', serif;
+    font-size: 14px;
+    display: flex; align-items: center; justify-content: center;
+    transition: border-color 0.2s, color 0.2s;
+  }
+  #close-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+  .sidebar-search {
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+  .sidebar-search input {
+    width: 100%;
+    background: #1a1a1a;
+    border: 1px solid var(--border2);
+    color: var(--text);
+    font-family: 'Times New Roman', serif;
+    font-size: 11px;
+    padding: 7px 10px;
+    outline: none;
+    letter-spacing: 0.05em;
+  }
+  .sidebar-search input::placeholder { color: var(--text-mute); }
+  .sidebar-search input:focus { border-color: var(--accent); }
+
+  .match-list {
+    flex: 1;
+    overflow-y: auto;
+    padding: 8px 12px;
+  }
+  .match-list::-webkit-scrollbar { width: 4px; }
+  .match-list::-webkit-scrollbar-track { background: transparent; }
+  .match-list::-webkit-scrollbar-thumb { background: var(--border2); }
+
+  .match-card {
+    border: 1px solid var(--border);
+    background: #242424;
+    padding: 10px 12px;
+    margin-bottom: 6px;
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s;
+    position: relative;
+    overflow: hidden;
+  }
+  .match-card::before {
+    content: '';
+    position: absolute;
+    left: 0; top: 0; bottom: 0;
+    width: 2px;
+    background: var(--text-mute);
+    transition: background 0.15s;
+  }
+  .match-card:hover { background: #2a2a2a; border-color: var(--border2); }
+  .match-card:hover::before { background: var(--accent); }
+  .match-card.active { background: #2e2e2e; border-color: #444; }
+  .match-card.active::before { background: var(--accent); }
+
+  .mc-teams {
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--text);
+    margin-bottom: 4px;
+  }
+  .mc-meta {
+    font-size: 10px;
+    color: var(--text-dim);
+    letter-spacing: 0.05em;
+  }
+
+  /* ─── HAMBURGER ───────────────────────────────────────── */
+  #menu-btn {
+    position: fixed;
+    top: 12px; left: 12px;
+    z-index: 999;
+    background: var(--panel2);
+    border: 1px solid var(--border2);
+    width: 36px; height: 36px;
+    cursor: pointer;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    gap: 4px;
+    transition: border-color 0.2s;
+  }
+  #menu-btn:hover { border-color: var(--accent); }
+  #menu-btn span {
+    display: block;
+    width: 16px; height: 1.5px;
+    background: var(--text);
+    transition: background 0.2s;
+  }
+  #menu-btn:hover span { background: var(--accent); }
+
+  /* ─── MAIN DASHBOARD ──────────────────────────────────── */
+  #main {
+    min-height: 100vh;
+    padding: 0 0 40px;
+  }
+
+  .dash-header {
+    text-align: center;
+    padding: 18px 60px 12px;
+    border-bottom: 1px solid var(--border);
+  }
+  .dash-title {
+    font-size: 15px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--text);
+  }
+  .dash-sub {
+    font-size: 10px;
+    letter-spacing: 0.15em;
+    color: var(--text-dim);
+    margin-top: 3px;
+  }
+
+  .dash-body {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    padding: 14px 16px;
+    max-width: 1456px;
+  }
+
+  /* ─── LEFT COLUMN ─────────────────────────────────────── */
+  .left-col { display: flex; flex-direction: column; gap: 10px; }
+
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    padding: 10px;
+  }
+  .panel-label {
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--text-dim);
+    margin-bottom: 8px;
+  }
+
+  /* Field */
+  .field-wrap { position: relative; }
+  #field-canvas {
+    display: block;
+    width: 100%;
+    height: 240px;
+    background: var(--green);
+    border: 1px solid var(--border2);
+  }
+
+  .filter-btns {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 4px;
+    margin-top: 6px;
+  }
+  .filter-btn {
+    background: var(--panel2);
+    border: 1px solid var(--border2);
+    color: var(--text-dim);
+    font-family: 'Times New Roman', serif;
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    padding: 7px;
+    cursor: pointer;
+    text-align: center;
+    transition: color 0.15s, border-color 0.15s;
+  }
+  .filter-btn:hover, .filter-btn.active {
+    color: var(--text);
+    border-color: var(--accent);
+  }
+
+  /* Formations + Match Info */
+  .bottom-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+
+  .formation-team { margin-bottom: 10px; }
+  .ft-name {
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    display: flex; align-items: center; gap: 6px;
+    margin-bottom: 2px;
+  }
+  .ft-dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    flex-shrink: 0;
+  }
+  .ft-form {
+    font-size: 13px;
+    letter-spacing: 0.05em;
+    color: var(--text);
+    margin-left: 14px;
+  }
+  .ft-label {
+    font-size: 9px;
+    color: var(--text-mute);
+    letter-spacing: 0.08em;
+    margin-left: 14px;
+  }
+
+  .match-info-row {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+  }
+  .mi-row {
+    display: flex;
+    font-size: 10px;
+    letter-spacing: 0.06em;
+  }
+  .mi-label { color: var(--text-dim); width: 90px; flex-shrink: 0; }
+  .mi-val { color: var(--text-mute); }
+
+  /* ─── RIGHT COLUMN ─────────────────────────────────────── */
+  .right-col { display: flex; flex-direction: column; gap: 10px; }
+
+  .stats-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .stat-row {
+    display: grid;
+    grid-template-columns: 1fr 80px 1fr;
+    align-items: center;
+    gap: 6px;
+    font-size: 10px;
+    letter-spacing: 0.06em;
+  }
+  .stat-bar-wrap {
+    height: 3px;
+    background: var(--border2);
+    position: relative;
+    overflow: hidden;
+  }
+  .stat-bar-l, .stat-bar-r {
+    position: absolute;
+    top: 0; height: 100%;
+    background: var(--text-mute);
+    transition: width 0.6s ease;
+  }
+  .stat-bar-l { right: 0; background: var(--green-line); }
+  .stat-bar-r { left: 0; background: var(--orange); }
+  .stat-label {
+    text-align: center;
+    color: var(--text-dim);
+    font-size: 10px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+  .stat-val-l { text-align: right; color: var(--text-dim); }
+  .stat-val-r { text-align: left; color: var(--text-dim); }
+
+  /* Top performers */
+  .performer-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .performer-row:last-child { border-bottom: none; }
+  .p-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+  .p-name { font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; flex: 1; }
+  .p-stat { font-size: 10px; color: var(--text-dim); letter-spacing: 0.06em; }
+  .p-dots { color: var(--text-mute); font-size: 10px; letter-spacing: 0.15em; }
+
+  /* ─── SCROLL SECTION ──────────────────────────────────── */
+  .scroll-indicator {
+    text-align: center;
+    padding: 20px;
+    border-top: 1px solid var(--border);
+    color: var(--text-mute);
+    font-size: 10px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: color 0.2s;
+  }
+  .scroll-indicator:hover { color: var(--accent); }
+  .scroll-indicator .arrow {
+    display: block;
+    font-size: 18px;
+    margin-top: 4px;
+    animation: bounce 1.8s infinite;
+  }
+  @keyframes bounce {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(5px); }
+  }
+
+  #analytics-section {
+    padding: 40px 16px;
+    border-top: 1px solid var(--border);
+    background: #181818;
+  }
+
+  .section-header {
+    text-align: center;
+    margin-bottom: 32px;
+  }
+  .section-header h2 {
+    font-size: 13px;
+    letter-spacing: 0.3em;
+    text-transform: uppercase;
+    color: var(--text);
+    font-weight: normal;
+  }
+  .section-header p {
+    font-size: 10px;
+    letter-spacing: 0.15em;
+    color: var(--text-mute);
+    margin-top: 6px;
+  }
+  .section-divider {
+    width: 40px;
+    height: 1px;
+    background: var(--accent);
+    margin: 10px auto 0;
+  }
+
+  .analytics-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+    max-width: 1456px;
+    margin-bottom: 12px;
+  }
+  .analytics-grid.two-col {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .chart-panel {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    padding: 14px;
+  }
+  .chart-title {
+    font-size: 10px;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--text-dim);
+    margin-bottom: 12px;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 8px;
+  }
+  .chart-placeholder {
+    width: 100%;
+    height: 180px;
+    background: #1e1e1e;
+    border: 1px dashed var(--border2);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    gap: 8px;
+    color: var(--text-mute);
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+  .chart-placeholder svg { opacity: 0.3; }
+
+  /* ─── CANVAS CHARTS ───────────────────────────────────── */
+  .chart-canvas-wrap { position: relative; }
+  canvas.chart { display: block; width: 100% !important; }
+
+  /* ─── MODEL OUTPUT PANEL ──────────────────────────────── */
+  .model-panel {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    padding: 14px;
+  }
+  .model-title {
+    font-size: 10px;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--text-dim);
+    margin-bottom: 12px;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 8px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .model-badge {
+    font-size: 9px;
+    letter-spacing: 0.1em;
+    color: var(--text-mute);
+    border: 1px solid var(--border2);
+    padding: 2px 6px;
+  }
+  .model-placeholder {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 120px;
+    color: var(--text-mute);
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    border: 1px dashed var(--border2);
+  }
+
+  .xg-bars { display: flex; flex-direction: column; gap: 8px; }
+  .xg-row { display: flex; align-items: center; gap: 8px; font-size: 10px; }
+  .xg-label { width: 90px; color: var(--text-dim); letter-spacing: 0.06em; flex-shrink: 0; }
+  .xg-bar-wrap { flex: 1; height: 6px; background: #1e1e1e; border: 1px solid var(--border); }
+  .xg-bar { height: 100%; transition: width 1s ease; }
+  .xg-val { width: 30px; text-align: right; color: var(--text-mute); }
+
+  .heat-note {
+    margin-top: 8px;
+    font-size: 9px;
+    color: var(--text-mute);
+    letter-spacing: 0.08em;
+    text-align: center;
+  }
+
+  /* legend */
+  .legend { display: flex; gap: 16px; margin-top: 8px; }
+  .legend-item { display: flex; align-items: center; gap: 4px; font-size: 9px; color: var(--text-dim); letter-spacing: 0.06em; }
+  .legend-dot { width: 8px; height: 8px; border-radius: 50%; }
+
+  footer {
+    text-align: center;
+    padding: 24px;
+    border-top: 1px solid var(--border);
+    font-size: 9px;
+    letter-spacing: 0.2em;
+    color: var(--text-mute);
+    text-transform: uppercase;
+  }
+</style>
+</head>
+<body>
+
+<!-- HAMBURGER -->
+<button id="menu-btn" onclick="toggleSidebar()">
+  <span></span><span></span><span></span>
+</button>
+
+<!-- SIDEBAR -->
+<div id="sidebar">
+  <div class="sidebar-header">
+    <span class="sidebar-title">Match Selection</span>
+    <button id="close-btn" onclick="toggleSidebar()">✕</button>
+  </div>
+  <div class="sidebar-search">
+    <input type="text" placeholder="Search matches..." id="search-input" oninput="filterMatches(this.value)" />
+  </div>
+  <div class="match-list" id="match-list">
+    <!-- cards injected by JS -->
+  </div>
+</div>
+
+<!-- MAIN -->
+<div id="main">
+
+  <!-- HEADER -->
+  <div class="dash-header">
+    <div class="dash-title">PLACEHOLDER vs PLACEHOLDER</div>
+    <div class="dash-sub">STADIUM, CUP</div>
+    <div class="dash-sub">DATE AND TIME</div>
+  </div>
+
+  <!-- DASHBOARD BODY -->
+  <div class="dash-body">
+
+    <!-- LEFT -->
+    <div class="left-col">
+
+      <!-- Field View -->
+      <div class="panel">
+        <div class="panel-label">Field View</div>
+        <canvas id="field-canvas"></canvas>
+        <div class="filter-btns">
+          <div class="filter-btn active" onclick="setFilter(this,'all')">All Events</div>
+          <div class="filter-btn" onclick="setFilter(this,'shots')">Shots</div>
+          <div class="filter-btn" onclick="setFilter(this,'corners')">Corners</div>
+          <div class="filter-btn" onclick="setFilter(this,'keypasses')">Key Passes</div>
+        </div>
+      </div>
+
+      <!-- Formations + Match Info -->
+      <div class="bottom-row">
+        <div class="panel">
+          <div class="panel-label">Formations</div>
+          <div class="formation-team">
+            <div class="ft-name">
+              <div class="ft-dot" style="background:var(--green-line)"></div>
+              COUNTRY 1
+            </div>
+            <div class="ft-form">X - X - X</div>
+            <div class="ft-label">Attacking Formation</div>
+          </div>
+          <div class="formation-team">
+            <div class="ft-name">
+              <div class="ft-dot" style="background:var(--orange)"></div>
+              COUNTRY 2
+            </div>
+            <div class="ft-form">X - X - X</div>
+            <div class="ft-label">Attacking Formation</div>
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-label">Match Info</div>
+          <div class="match-info-row">
+            <div class="mi-row"><span class="mi-label">Competition:</span><span class="mi-val">—</span></div>
+            <div class="mi-row"><span class="mi-label">Venue:</span><span class="mi-val">—</span></div>
+            <div class="mi-row"><span class="mi-label">Kickoff:</span><span class="mi-val">—</span></div>
+            <div class="mi-row"><span class="mi-label">Current:</span><span class="mi-val">—</span></div>
+            <div class="mi-row"><span class="mi-label">Date:</span><span class="mi-val">—</span></div>
+            <div class="mi-row"><span class="mi-label">Pitch:</span><span class="mi-val">—</span></div>
+            <div class="mi-row"><span class="mi-label">Game ID:</span><span class="mi-val">—</span></div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- RIGHT -->
+    <div class="right-col">
+
+      <!-- Match Statistics -->
+      <div class="panel">
+        <div class="panel-label">Match Statistics</div>
+        <div class="stats-grid">
+          <div class="stat-row">
+            <div class="stat-bar-wrap"><div class="stat-bar-l" id="pos-l" style="width:50%"></div></div>
+            <div class="stat-label">Possession %</div>
+            <div class="stat-bar-wrap"><div class="stat-bar-r" id="pos-r" style="width:50%"></div></div>
+          </div>
+          <div class="stat-row">
+            <div class="stat-val-l">—</div><div class="stat-label">Shots</div><div class="stat-val-r">—</div>
+          </div>
+          <div class="stat-row">
+            <div class="stat-val-l">—</div><div class="stat-label">Shots on Target</div><div class="stat-val-r">—</div>
+          </div>
+          <div class="stat-row">
+            <div class="stat-val-l">—</div><div class="stat-label">Corners</div><div class="stat-val-r">—</div>
+          </div>
+          <div class="stat-row">
+            <div class="stat-val-l">—</div><div class="stat-label">Fouls</div><div class="stat-val-r">—</div>
+          </div>
+          <div class="stat-row">
+            <div class="stat-val-l">—</div><div class="stat-label">Passes</div><div class="stat-val-r">—</div>
+          </div>
+          <div class="stat-row">
+            <div class="stat-val-l">—</div><div class="stat-label">Pass Accuracy</div><div class="stat-val-r">—</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Top Performers -->
+      <div class="panel">
+        <div class="panel-label">Top Performers</div>
+        <div class="performer-row">
+          <div class="p-dot" style="background:var(--orange)"></div>
+          <div class="p-name">Player Name</div>
+          <div class="p-stat">Most</div>
+          <div class="p-dots">............</div>
+        </div>
+        <div class="performer-row">
+          <div class="p-dot" style="background:var(--orange)"></div>
+          <div class="p-name">Player Name</div>
+          <div class="p-stat">Most</div>
+          <div class="p-dots">............</div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- SCROLL CTA -->
+  <div class="scroll-indicator" onclick="document.getElementById('analytics-section').scrollIntoView({behavior:'smooth'})">
+    Analytics &amp; Models
+    <span class="arrow">↓</span>
+  </div>
+
+  <!-- ─── ANALYTICS SECTION ─────────────────────────────── -->
+  <div id="analytics-section">
+
+    <div class="section-header">
+      <h2>Analytics &amp; Models</h2>
+      <p>Model outputs will populate here once integrated</p>
+      <div class="section-divider"></div>
+    </div>
+
+    <!-- Row 1: xG + Shot Map + Possession -->
+    <div class="analytics-grid">
+
+      <!-- xG Model -->
+      <div class="model-panel">
+        <div class="model-title">
+          Expected Goals (xG)
+          <span class="model-badge">MODEL OUTPUT</span>
+        </div>
+        <div class="xg-bars">
+          <div class="xg-row">
+            <div class="xg-label">Country 1</div>
+            <div class="xg-bar-wrap"><div class="xg-bar" style="width:0%;background:var(--green-line)"></div></div>
+            <div class="xg-val">—</div>
+          </div>
+          <div class="xg-row">
+            <div class="xg-label">Country 2</div>
+            <div class="xg-bar-wrap"><div class="xg-bar" style="width:0%;background:var(--orange)"></div></div>
+            <div class="xg-val">—</div>
+          </div>
+        </div>
+        <div class="model-placeholder" style="margin-top:14px;height:100px;">
+          Awaiting Model Data
+        </div>
+      </div>
+
+      <!-- Shot Map -->
+      <div class="chart-panel">
+        <div class="chart-title">Shot Map</div>
+        <canvas id="shot-map-canvas" height="180" style="width:100%;background:#1e1e1e;border:1px solid var(--border2)"></canvas>
+        <div class="legend">
+          <div class="legend-item"><div class="legend-dot" style="background:var(--green-line)"></div> Country 1</div>
+          <div class="legend-item"><div class="legend-dot" style="background:var(--orange)"></div> Country 2</div>
+          <div class="legend-item"><div class="legend-dot" style="background:#555"></div> Off Target</div>
+        </div>
+      </div>
+
+      <!-- Possession Timeline -->
+      <div class="chart-panel">
+        <div class="chart-title">Possession Timeline</div>
+        <canvas id="poss-canvas" height="180" style="width:100%;background:#1e1e1e;border:1px solid var(--border2)"></canvas>
+        <div class="heat-note">Placeholder — connect model output to populate</div>
+      </div>
+
+    </div>
+
+    <!-- Row 2: Heatmap + Pass Network + Model -->
+    <div class="analytics-grid">
+
+      <!-- Heatmap -->
+      <div class="chart-panel">
+        <div class="chart-title">Pressure Heatmap</div>
+        <canvas id="heat-canvas" height="180" style="width:100%;background:#1e1e1e;border:1px solid var(--border2)"></canvas>
+        <div class="heat-note">Placeholder — connect model output to populate</div>
+      </div>
+
+      <!-- Pass Network -->
+      <div class="chart-panel">
+        <div class="chart-title">Pass Network</div>
+        <canvas id="pass-canvas" height="180" style="width:100%;background:#1e1e1e;border:1px solid var(--border2)"></canvas>
+        <div class="heat-note">Placeholder — connect model output to populate</div>
+      </div>
+
+      <!-- Custom Model Output -->
+      <div class="model-panel">
+        <div class="model-title">
+          Custom Model Output
+          <span class="model-badge">MODEL OUTPUT</span>
+        </div>
+        <div class="model-placeholder">
+          Awaiting Model Data
+        </div>
+        <div class="model-placeholder" style="margin-top:8px;height:60px;">
+          Awaiting Model Data
+        </div>
+      </div>
+
+    </div>
+
+  </div><!-- /analytics-section -->
+
+  <footer>Tactical Viewer &nbsp;·&nbsp; All data is placeholder</footer>
+
+</div><!-- /main -->
+
+<script>
+// ─── SIDEBAR ────────────────────────────────────────────────
+function toggleSidebar() {
+  document.getElementById('sidebar').classList.toggle('open');
+}
+
+const MATCHES = [
+  { teams: 'Country 1 vs Country 2', comp: 'Competition Name', date: 'Date · Venue' },
+  { teams: 'Country 3 vs Country 4', comp: 'Competition Name', date: 'Date · Venue' },
+  { teams: 'Country 5 vs Country 6', comp: 'Competition Name', date: 'Date · Venue' },
+  { teams: 'Country 7 vs Country 8', comp: 'Competition Name', date: 'Date · Venue' },
+  { teams: 'Country 9 vs Country 10', comp: 'Competition Name', date: 'Date · Venue' },
+  { teams: 'Country 1 vs Country 3', comp: 'Competition Name', date: 'Date · Venue' },
+  { teams: 'Country 2 vs Country 4', comp: 'Competition Name', date: 'Date · Venue' },
+];
+
+function renderCards(list) {
+  const el = document.getElementById('match-list');
+  el.innerHTML = list.map((m, i) => `
+    <div class="match-card${i===0?' active':''}" onclick="selectMatch(this,${i})">
+      <div class="mc-teams">${m.teams}</div>
+      <div class="mc-meta">${m.comp}</div>
+      <div class="mc-meta">${m.date}</div>
+    </div>
+  `).join('');
+}
+renderCards(MATCHES);
+
+function filterMatches(q) {
+  const filtered = MATCHES.filter(m =>
+    m.teams.toLowerCase().includes(q.toLowerCase()) ||
+    m.comp.toLowerCase().includes(q.toLowerCase())
+  );
+  renderCards(filtered);
+}
+
+function selectMatch(el, idx) {
+  document.querySelectorAll('.match-card').forEach(c => c.classList.remove('active'));
+  el.classList.add('active');
+  // TODO: load match data
+}
+
+// ─── FIELD CANVAS ────────────────────────────────────────────
+const fc = document.getElementById('field-canvas');
+const fctx = fc.getContext('2d');
+function drawField() {
+  fc.width = fc.offsetWidth;
+  fc.height = fc.offsetHeight || 240;
+  const w = fc.width, h = fc.height;
+  const ctx = fctx;
+  // grass
+  ctx.fillStyle = '#2a6a2a';
+  ctx.fillRect(0,0,w,h);
+  // stripes
+  for(let i=0;i<10;i++){
+    ctx.fillStyle = i%2===0?'#2a6a2a':'#2d702d';
+    ctx.fillRect(i*(w/10),0,w/10,h);
+  }
+  ctx.strokeStyle = 'rgba(255,255,255,0.75)';
+  ctx.lineWidth = 1.5;
+  // outer
+  ctx.strokeRect(10,10,w-20,h-20);
+  // halfway
+  ctx.beginPath(); ctx.moveTo(w/2,10); ctx.lineTo(w/2,h-10); ctx.stroke();
+  // center circle
+  ctx.beginPath(); ctx.arc(w/2,h/2,h*0.18,0,Math.PI*2); ctx.stroke();
+  ctx.beginPath(); ctx.arc(w/2,h/2,3,0,Math.PI*2); ctx.fillStyle='rgba(255,255,255,0.8)'; ctx.fill();
+  // penalty areas
+  const pa_w=w*0.15, pa_h=h*0.55;
+  ctx.strokeRect(10, (h-pa_h)/2, pa_w, pa_h);
+  ctx.strokeRect(w-10-pa_w, (h-pa_h)/2, pa_w, pa_h);
+  // 6-yard boxes
+  const sb_w=w*0.06, sb_h=h*0.28;
+  ctx.strokeRect(10,(h-sb_h)/2,sb_w,sb_h);
+  ctx.strokeRect(w-10-sb_w,(h-sb_h)/2,sb_w,sb_h);
+}
+drawField();
+window.addEventListener('resize', drawField);
+
+// ─── FILTER BUTTONS ──────────────────────────────────────────
+function setFilter(el, type) {
+  document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+  el.classList.add('active');
+}
+
+// ─── SHOT MAP CANVAS (placeholder dots) ─────────────────────
+function drawShotMap() {
+  const c = document.getElementById('shot-map-canvas');
+  c.width = c.offsetWidth || 400;
+  c.height = 180;
+  const ctx = c.getContext('2d');
+  ctx.fillStyle = '#1e1e1e';
+  ctx.fillRect(0,0,c.width,c.height);
+  // draw mini half-field outline
+  ctx.strokeStyle = '#333';
+  ctx.lineWidth = 1;
+  ctx.strokeRect(10,10,c.width-20,c.height-20);
+  ctx.beginPath();
+  ctx.arc(c.width/2, c.height, c.height*0.4,Math.PI,0);
+  ctx.stroke();
+  ctx.strokeRect(c.width/2-50,10,100,40);
+  // placeholder shot dots
+  const shots=[
+    {x:0.45,y:0.3,on:true,team:0},{x:0.55,y:0.2,on:true,team:1},
+    {x:0.35,y:0.5,on:false,team:0},{x:0.6,y:0.4,on:false,team:1},
+    {x:0.5,y:0.15,on:true,team:0}
+  ];
+  shots.forEach(s=>{
+    const x=s.x*c.width, y=s.y*c.height;
+    ctx.beginPath();
+    ctx.arc(x,y,5,0,Math.PI*2);
+    ctx.fillStyle = s.on ? (s.team===0?'rgba(76,175,80,0.85)':'rgba(224,120,64,0.85)') : '#555';
+    ctx.fill();
+    ctx.strokeStyle='rgba(255,255,255,0.2)'; ctx.lineWidth=1; ctx.stroke();
+  });
+  // note
+  ctx.fillStyle='#555';
+  ctx.font='10px "Times New Roman"';
+  ctx.fillText('Placeholder — connect model data',10,c.height-8);
+}
+drawShotMap();
+
+// ─── POSSESSION CANVAS ───────────────────────────────────────
+function drawPossession() {
+  const c = document.getElementById('poss-canvas');
+  c.width = c.offsetWidth || 400;
+  c.height = 180;
+  const ctx = c.getContext('2d');
+  ctx.fillStyle='#1e1e1e'; ctx.fillRect(0,0,c.width,c.height);
+  // grid lines
+  ctx.strokeStyle='#2a2a2a'; ctx.lineWidth=1;
+  for(let i=0;i<6;i++){
+    const y=20+i*(c.height-30)/5;
+    ctx.beginPath(); ctx.moveTo(30,y); ctx.lineTo(c.width-10,y); ctx.stroke();
+  }
+  // placeholder line
+  const pts1=[[0,0.5],[0.1,0.55],[0.2,0.48],[0.3,0.6],[0.4,0.52],[0.5,0.58],[0.6,0.5],[0.7,0.62],[0.8,0.55],[1,0.6]];
+  ctx.beginPath();
+  pts1.forEach((p,i)=>{
+    const x=30+p[0]*(c.width-40), y=20+p[1]*(c.height-40);
+    i===0?ctx.moveTo(x,y):ctx.lineTo(x,y);
+  });
+  ctx.strokeStyle='rgba(76,175,80,0.6)'; ctx.lineWidth=1.5; ctx.stroke();
+  // fill area
+  ctx.lineTo(c.width-10, c.height-10);
+  ctx.lineTo(30, c.height-10);
+  ctx.closePath();
+  ctx.fillStyle='rgba(76,175,80,0.08)'; ctx.fill();
+  // label
+  ctx.fillStyle='#555'; ctx.font='10px "Times New Roman"';
+  ctx.fillText('Minutes →', c.width/2-30, c.height-2);
+}
+drawPossession();
+
+// ─── HEATMAP CANVAS ──────────────────────────────────────────
+function drawHeatmap() {
+  const c = document.getElementById('heat-canvas');
+  c.width = c.offsetWidth || 400;
+  c.height = 180;
+  const ctx = c.getContext('2d');
+  ctx.fillStyle='#1e1e1e'; ctx.fillRect(0,0,c.width,c.height);
+  // placeholder hot zones
+  const zones=[
+    {x:0.15,y:0.5,r:40,a:0.15},{x:0.3,y:0.3,r:30,a:0.1},
+    {x:0.5,y:0.5,r:50,a:0.1},{x:0.7,y:0.4,r:35,a:0.12},
+    {x:0.85,y:0.6,r:45,a:0.18}
+  ];
+  zones.forEach(z=>{
+    const grd=ctx.createRadialGradient(z.x*c.width,z.y*c.height,2,z.x*c.width,z.y*c.height,z.r);
+    grd.addColorStop(0,`rgba(224,120,64,${z.a*3})`);
+    grd.addColorStop(1,'transparent');
+    ctx.fillStyle=grd;
+    ctx.fillRect(0,0,c.width,c.height);
+  });
+  // field overlay
+  ctx.strokeStyle='#333'; ctx.lineWidth=1;
+  ctx.strokeRect(8,8,c.width-16,c.height-16);
+  ctx.beginPath(); ctx.moveTo(c.width/2,8); ctx.lineTo(c.width/2,c.height-8); ctx.stroke();
+  ctx.fillStyle='#555'; ctx.font='10px "Times New Roman"';
+  ctx.fillText('Placeholder — connect model data',10,c.height-8);
+}
+drawHeatmap();
+
+// ─── PASS NETWORK CANVAS ─────────────────────────────────────
+function drawPassNetwork() {
+  const c = document.getElementById('pass-canvas');
+  c.width = c.offsetWidth || 400;
+  c.height = 180;
+  const ctx = c.getContext('2d');
+  ctx.fillStyle='#1e1e1e'; ctx.fillRect(0,0,c.width,c.height);
+  // field lines
+  ctx.strokeStyle='#2a2a2a'; ctx.lineWidth=1;
+  ctx.strokeRect(10,10,c.width-20,c.height-20);
+  ctx.beginPath(); ctx.moveTo(c.width/2,10); ctx.lineTo(c.width/2,c.height-10); ctx.stroke();
+  // placeholder nodes
+  const nodes=[
+    {x:0.15,y:0.5},{x:0.3,y:0.2},{x:0.3,y:0.8},{x:0.45,y:0.35},
+    {x:0.45,y:0.65},{x:0.6,y:0.2},{x:0.6,y:0.5},{x:0.6,y:0.8},{x:0.8,y:0.4},{x:0.8,y:0.65}
+  ];
+  const edges=[[0,1],[0,2],[1,3],[2,4],[3,5],[3,6],[4,6],[4,7],[5,8],[6,8],[7,9],[8,9]];
+  edges.forEach(e=>{
+    const a=nodes[e[0]], b=nodes[e[1]];
+    ctx.beginPath();
+    ctx.moveTo(a.x*c.width,a.y*c.height);
+    ctx.lineTo(b.x*c.width,b.y*c.height);
+    ctx.strokeStyle='rgba(76,175,80,0.2)'; ctx.lineWidth=1; ctx.stroke();
+  });
+  nodes.forEach((n,i)=>{
+    ctx.beginPath(); ctx.arc(n.x*c.width,n.y*c.height,5,0,Math.PI*2);
+    ctx.fillStyle='rgba(76,175,80,0.7)'; ctx.fill();
+  });
+  ctx.fillStyle='#555'; ctx.font='10px "Times New Roman"';
+  ctx.fillText('Placeholder — connect model data',10,c.height-8);
+}
+drawPassNetwork();
+
+window.addEventListener('resize', ()=>{
+  drawField(); drawShotMap(); drawPossession(); drawHeatmap(); drawPassNetwork();
+});
+</script>
+</body>
+</html>
